@@ -51,6 +51,7 @@ data class StartServiceParams(
     val callLoginParams: XmppCredentials? = null,
     val sinkType: RecordingSinkType,
     val youTubeStreamKey: String? = null,
+    val recordingDirectory: String? = "/tmp/",
     /**
      * Params to be used if [RecordingSinkType] is [RecordingSinkType.GATEWAY]
      */
@@ -122,10 +123,11 @@ class HttpApi(
                 val youTubeStreamKey = startServiceParams.youTubeStreamKey ?: return Response.status(Response.Status.PRECONDITION_FAILED).build()
                 // If it's a stream, it must have the callLoginParams set
                 val callLoginParams = startServiceParams.callLoginParams ?: return Response.status(Response.Status.PRECONDITION_FAILED).build()
+                val recordingDirectory = startServiceParams.recordingDirectory ?: return Response.status(Response.Status.PRECONDITION_FAILED).build()
                 serviceLauncher {
                     jibriManager.startStreaming(
                             ServiceParams(usageTimeoutMinutes = 0),
-                            StreamingParams(startServiceParams.callParams, startServiceParams.sessionId, callLoginParams, youTubeStreamKey),
+                            StreamingParams(startServiceParams.callParams, startServiceParams.sessionId, callLoginParams, youTubeStreamKey, null, recordingDirectory),
                             environmentContext = null
                     )
                 }

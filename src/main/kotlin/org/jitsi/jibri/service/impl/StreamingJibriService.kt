@@ -31,6 +31,11 @@ import org.jitsi.jibri.status.ComponentState
 import org.jitsi.jibri.util.extensions.error
 import org.jitsi.jibri.util.whenever
 
+import org.jitsi.jibri.util.createIfDoesNotExist
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
+import java.nio.file.Files
+
 private const val YOUTUBE_URL = "rtmp://a.rtmp.youtube.com/live2"
 private const val STREAMING_MAX_BITRATE = 2976
 
@@ -58,7 +63,11 @@ data class StreamingParams(
     /**
      * The YouTube broadcast ID for this stream, if we have it
      */
-    val youTubeBroadcastId: String? = null
+    val youTubeBroadcastId: String? = null,
+    /**
+     * The directory in which recordings should be created
+     */
+    val recordingDirectory: String? = "/tmp/"
 )
 
 /**
@@ -69,6 +78,9 @@ data class StreamingParams(
 class StreamingJibriService(
     private val streamingParams: StreamingParams
 ) : StatefulJibriService("Streaming") {
+    private val fileSystem: FileSystem = FileSystems.getDefault()
+    private val sessionRecordingDirectory =
+        (fileSystem.getPath(streamingParams.recordingDirectory)).resolve(streamingParams.sessionId)
     private val capturer = FfmpegCapturer()
     private val sink: Sink
     private val jibriSelenium = JibriSelenium()
@@ -77,7 +89,9 @@ class StreamingJibriService(
         sink = StreamSink(
             url = "$YOUTUBE_URL/${streamingParams.youTubeStreamKey}",
             streamingMaxBitrate = STREAMING_MAX_BITRATE,
-            streamingBufSize = 2 * STREAMING_MAX_BITRATE
+            streamingBufSize = 2 * STREAMING_MAX_BITRATE,
+            callName = streamingParams.callParams.callUrlInfo.callName,
+            recordingsDirectory = sessionRecordingDirectory
         )
 
         registerSubComponent(JibriSelenium.COMPONENT_ID, jibriSelenium)
@@ -85,6 +99,13 @@ class StreamingJibriService(
     }
 
     override fun start() {
+        if (!createIfDoesNotExist(sessionRecordingDirectory, logger)) {
+            publishStatus(ComponentState.Error(ErrorCreatingRecordingsDirectory))
+        }
+        if (!Files.isWritable(sessionRecordingDirectory)) {
+            logger.error("Unable to write to ${streamingParams.recordingDirectory}")
+            publishStatus(ComponentState.Error(RecordingsDirectoryNotWritable))
+        }
         jibriSelenium.joinCall(
                 streamingParams.callParams.callUrlInfo.copy(urlParams = RECORDING_URL_OPTIONS),
                 streamingParams.callLoginParams)
